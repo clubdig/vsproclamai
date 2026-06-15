@@ -1,5 +1,5 @@
-app = vsproclamai
-primary_region = gru
+app = "vsproclamai"
+primary_region = "gru"
 
 [build]
   dockerfile = "Dockerfile"

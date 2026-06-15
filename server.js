@@ -243,6 +243,84 @@ app.get('/api/stems/:songId', (req, res) => {
 
 // ── API: Download e Separação ──────────────────────────────────────────
 
+app.get('/api/youtube/info', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url obrigatória' });
+  try {
+    const downloader = new YouTubeDownloader();
+    const info = await downloader.getInfo(url);
+    res.json(info);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/add-and-process', async (req, res) => {
+  const { title, artist, bpm, key, timeSignature, youtubeUrl, category, duration } = req.body;
+  if (!youtubeUrl) return res.status(400).json({ error: 'URL do YouTube obrigatória' });
+
+  try {
+    const songData = {
+      title: title || '',
+      artist: artist || '',
+      bpm: bpm || 120,
+      key: key || '',
+      timeSignature: timeSignature || '4/4',
+      youtubeUrl: youtubeUrl,
+      category: category || 'Louvor',
+      duration: duration || 0
+    };
+
+    if (!songData.title) {
+      const downloader = new YouTubeDownloader();
+      const info = await downloader.getInfo(youtubeUrl);
+      songData.title = info.title;
+      songData.artist = info.artist;
+      songData.duration = info.duration;
+    }
+
+    const song = db.createSong(songData);
+    res.json({ success: true, song: db.getSong(song.id), processing: true });
+
+    processInBackground(song.id, songData.title, youtubeUrl);
+  } catch (e) {
+    console.error('[Auto Process Error]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+async function processInBackground(songId, songTitle, youtubeUrl) {
+  try {
+    const outputDir = path.join(SONGS_AUDIO_DIR, songId);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    console.log(`[Background] Baixando: ${songTitle}`);
+    const downloader = new YouTubeDownloader({
+      onLog: (msg) => console.log(msg),
+      onProgress: (p) => console.log(`Download: ${(p * 100).toFixed(0)}%`)
+    });
+    const dlResult = await downloader.download(youtubeUrl, outputDir);
+    if (dlResult.duration) db.updateSong(songId, { duration: dlResult.duration });
+
+    console.log(`[Background] Separando: ${songTitle}`);
+    const inputDir = path.join(SONGS_AUDIO_DIR, songId);
+    const audioFiles = fs.readdirSync(inputDir).filter(f => f.endsWith('.wav') || f.endsWith('.mp3') || f.endsWith('.webm'));
+    if (audioFiles.length > 0) {
+      const stemsDir = path.join(STEMS_DIR, songId);
+      const separator = new DemucsSeparator({
+        onLog: (msg) => console.log(msg),
+        onProgress: (p) => console.log(`Separação: ${(p * 100).toFixed(0)}%`)
+      });
+      await separator.separateFile(path.join(inputDir, audioFiles[0]), stemsDir);
+      db.updateSong(songId, { stemsReady: true });
+    }
+
+    console.log(`[Background] Concluído: ${songTitle}`);
+  } catch (e) {
+    console.error(`[Background Error] ${songTitle}:`, e.message);
+  }
+}
+
 app.post('/api/download', async (req, res) => {
   const { songId, url } = req.body;
   if (!songId || !url) return res.status(400).json({ error: 'songId e url obrigatórios' });
@@ -394,6 +472,13 @@ io.on('connection', (socket) => {
       }
     });
   });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL]', err.message);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[UNHANDLED]', err?.message || err);
 });
 
 const PORT = process.env.PORT || 3000;

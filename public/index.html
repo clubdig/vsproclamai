@@ -245,8 +245,13 @@
   <div class="modal-overlay" id="addSongModal" style="display:none;">
     <div class="modal">
       <h2>Adicionar Música</h2>
-      <input type="text" id="newSongTitle" placeholder="Título">
-      <input type="text" id="newSongArtist" placeholder="Artista">
+      <input type="text" id="newSongUrl" placeholder="Cole o link do YouTube aqui..." oninput="onYouTubeUrlChange()">
+      <div id="addSongProgress" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill" id="addSongProgressFill"></div></div>
+        <p id="addSongStatus" style="color:var(--text-secondary);font-size:0.8em;text-align:center;margin-top:5px;"></p>
+      </div>
+      <input type="text" id="newSongTitle" placeholder="Título (preenchido automaticamente)">
+      <input type="text" id="newSongArtist" placeholder="Artista (preenchido automaticamente)">
       <input type="number" id="newSongBpm" placeholder="BPM" value="120">
       <input type="text" id="newSongKey" placeholder="Tom (ex: G, Am)">
       <select id="newSongTimeSig">
@@ -254,15 +259,17 @@
         <option value="3/4">3/4</option>
         <option value="6/8">6/8</option>
       </select>
-      <input type="text" id="newSongUrl" placeholder="URL do YouTube (opcional)">
       <select id="newSongCategory">
         <option value="Louvor">Louvor</option>
         <option value="Adoração">Adoração</option>
         <option value="Gospel">Gospel</option>
         <option value="Outro">Outro</option>
       </select>
+      <p style="color:var(--text-secondary);font-size:0.75em;margin-top:5px;">
+        Colando o link do YouTube, o sistema baixa o áudio, separa as pistas e carrega no mixer automaticamente.
+      </p>
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="addSong()">Adicionar</button>
+        <button class="btn btn-primary" id="addSongBtn" onclick="addSong()">Adicionar</button>
         <button class="btn" onclick="closeModals()">Cancelar</button>
       </div>
     </div>

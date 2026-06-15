@@ -1,8 +1,13 @@
 node_modules/
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/songs/
 data/stems/
 data/models/
 data/google-token.json
 .env
 *.log
+tunnel.txt
+tunnel_err.txt
+dist/VSProclamai/data/

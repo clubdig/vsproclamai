@@ -278,6 +278,12 @@ async function openSetlist(id) {
   if (!res.ok) return notify('Erro ao carregar repertório', true);
   currentSetlist = await res.json();
 
+  if (allSongs.length === 0) {
+    const songsRes = await fetch('/api/songs');
+    const songsData = await songsRes.json();
+    allSongs = songsData.songs || [];
+  }
+
   document.getElementById('setlistDetailTitle').textContent = currentSetlist.name;
   document.getElementById('setlistDetailInfo').innerHTML = `
     📅 ${currentSetlist.eventDate || 'Sem data'} ${currentSetlist.eventTime || ''}<br>
@@ -287,7 +293,6 @@ async function openSetlist(id) {
 
   renderSetlistSongs();
 
-  // Preencher select de músicas
   const select = document.getElementById('addSongToSetlistSelect');
   select.innerHTML = '<option value="">Adicionar música...</option>' +
     allSongs.map(s => `<option value="${s.id}">${s.title} - ${s.artist || ''}</option>`).join('');
@@ -312,7 +317,8 @@ function renderSetlistSongs() {
 
 async function addSongToCurrentSetlist() {
   const songId = document.getElementById('addSongToSetlistSelect').value;
-  if (!songId || !currentSetlist) return;
+  if (!songId) return notify('Selecione uma música', true);
+  if (!currentSetlist) return notify('Repertório não carregado', true);
 
   const position = currentSetlist.songs ? currentSetlist.songs.length : 0;
 
@@ -322,6 +328,7 @@ async function addSongToCurrentSetlist() {
     body: JSON.stringify({ songId, position })
   });
 
+  if (!res.ok) return notify('Erro ao adicionar música', true);
   currentSetlist = await res.json();
   renderSetlistSongs();
   notify('Música adicionada ao repertório');
@@ -451,9 +458,6 @@ async function syncDrive() {
 
 function selectDriveFile(fileId) {
   notify(`Arquivo Drive: ${fileId}`);
-}
-
-  renderSongList(data.songs);
 }
 
 function updateNowPlaying(song) {
@@ -798,29 +802,85 @@ function closeModals() {
   document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
 }
 
+let ytInfoTimeout = null;
+
+function onYouTubeUrlChange() {
+  const url = document.getElementById('newSongUrl').value;
+  if (ytInfoTimeout) clearTimeout(ytInfoTimeout);
+  if (!url || !url.includes('youtube.com') && !url.includes('youtu.be')) return;
+  
+  document.getElementById('addSongProgress').style.display = 'block';
+  document.getElementById('addSongStatus').textContent = 'Buscando informações do vídeo...';
+  document.getElementById('addSongProgressFill').style.width = '30%';
+
+  ytInfoTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/youtube/info?url=${encodeURIComponent(url)}`);
+      const info = await res.json();
+      if (info.error) throw new Error(info.error);
+      document.getElementById('newSongTitle').value = info.title || '';
+      document.getElementById('newSongArtist').value = info.artist || '';
+      document.getElementById('addSongProgressFill').style.width = '60%';
+      document.getElementById('addSongStatus').textContent = `Encontrado: ${info.title} (${info.artist})`;
+    } catch (e) {
+      document.getElementById('addSongStatus').textContent = 'Não foi possível buscar info';
+      document.getElementById('addSongProgressFill').style.width = '0%';
+    }
+  }, 800);
+}
+
 async function addSong() {
-  const song = {
-    title: document.getElementById('newSongTitle').value,
-    artist: document.getElementById('newSongArtist').value,
-    bpm: parseInt(document.getElementById('newSongBpm').value) || 120,
-    key: document.getElementById('newSongKey').value,
-    timeSignature: document.getElementById('newSongTimeSig').value,
-    youtubeUrl: document.getElementById('newSongUrl').value,
-    category: document.getElementById('newSongCategory').value,
-    duration: 0
-  };
+  const url = document.getElementById('newSongUrl').value;
+  const title = document.getElementById('newSongTitle').value;
+  const artist = document.getElementById('newSongArtist').value;
+  const bpm = parseInt(document.getElementById('newSongBpm').value) || 120;
+  const key = document.getElementById('newSongKey').value;
+  const timeSignature = document.getElementById('newSongTimeSig').value;
+  const category = document.getElementById('newSongCategory').value;
 
-  if (!song.title) return notify('Título é obrigatório', true);
+  if (!url && !title) return notify('Informe o título ou o link do YouTube', true);
 
-  await fetch('/api/songs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(song)
-  });
+  if (url) {
+    document.getElementById('addSongProgress').style.display = 'block';
+    document.getElementById('addSongBtn').disabled = true;
+    document.getElementById('addSongBtn').textContent = 'Processando...';
+    document.getElementById('addSongStatus').textContent = 'Baixando e separando... (pode levar alguns minutos)';
+    document.getElementById('addSongProgressFill').style.width = '50%';
 
-  closeModals();
-  loadSongs();
-  notify('Música adicionada!');
+    try {
+      const res = await fetch('/api/add-and-process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, artist, bpm, key, timeSignature, youtubeUrl: url, category })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      document.getElementById('addSongProgressFill').style.width = '100%';
+      document.getElementById('addSongStatus').textContent = 'Música criada! Processamento em andamento...';
+
+      closeModals();
+      loadSongs();
+      if (data.song) selectSong(data.song.id);
+      notify('Música criada! Download e separação rodando em background.');
+    } catch (e) {
+      document.getElementById('addSongStatus').textContent = `Erro: ${e.message}`;
+      document.getElementById('addSongProgressFill').style.width = '0%';
+      notify(`Erro: ${e.message}`, true);
+    } finally {
+      document.getElementById('addSongBtn').disabled = false;
+      document.getElementById('addSongBtn').textContent = 'Adicionar';
+    }
+  } else {
+    await fetch('/api/songs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, artist, bpm, key, timeSignature, youtubeUrl: '', category, duration: 0 })
+    });
+    closeModals();
+    loadSongs();
+    notify('Música adicionada!');
+  }
 }
 
 async function startDownload() {

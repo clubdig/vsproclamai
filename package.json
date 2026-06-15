@@ -1,21 +1,37 @@
 {
   "name": "vsproclamai",
   "version": "1.0.0",
-  "description": "VSProclamai - Sistema de Performance ao Vivo (Node.js puro, sem Python)",
+  "description": "VSProclamai - Sistema de Performance ao Vivo",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "setup": "node setup.js"
+    "setup": "node setup.js",
+    "build": "pkg . --targets node20-win-x64 --output VSProclamai.exe --assets public/*"
+  },
+  "bin": "server.js",
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "data/**/*"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
     "better-sqlite3": "^12.10.1",
     "cors": "^2.8.5",
     "express": "^4.21.0",
+    "ffmpeg-static": "^5.3.0",
     "googleapis": "^173.0.0",
     "onnxruntime-node": "^1.26.0",
     "sharp": "^0.35.1",
     "socket.io": "^4.7.5",
     "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }
