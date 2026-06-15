@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: vsproclamai
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    disk:
+      name: vsproclamai-data
+      mountPath: /app/data
+      sizeGB: 5

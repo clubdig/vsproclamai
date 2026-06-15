@@ -1,0 +1,8 @@
+node_modules/
+data/*.db
+data/songs/
+data/stems/
+data/models/
+data/google-token.json
+.env
+*.log
