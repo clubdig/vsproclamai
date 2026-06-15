@@ -488,7 +488,7 @@ async function loadStems(songId) {
     }
 
     for (const name of ALL_STEMS) {
-      const stemFile = data.stems.find(f => f.includes(name));
+      const stemFile = data.stems.find(f => f === name + '.wav' || f === name + '.mp3');
       if (!stemFile) continue;
 
       const response = await fetch(`/stems/${songId}/${stemFile}`);

@@ -312,6 +312,10 @@ async function processInBackground(songId, songTitle, youtubeUrl) {
         onProgress: (p) => console.log(`Separação: ${(p * 100).toFixed(0)}%`)
       });
       await separator.separateFile(path.join(inputDir, audioFiles[0]), stemsDir);
+
+      console.log(`[Background] Convertendo WAVs para MP3...`);
+      await convertStemsToMp3(stemsDir);
+
       db.updateSong(songId, { stemsReady: true });
     }
 
@@ -319,6 +323,26 @@ async function processInBackground(songId, songTitle, youtubeUrl) {
   } catch (e) {
     console.error(`[Background Error] ${songTitle}:`, e.message);
   }
+}
+
+function convertStemsToMp3(stemsDir) {
+  const ffmpegPath = require('ffmpeg-static');
+  const { execFile } = require('child_process');
+  const wavFiles = fs.readdirSync(stemsDir).filter(f => f.endsWith('.wav'));
+
+  return Promise.all(wavFiles.map(wavFile => {
+    return new Promise((resolve, reject) => {
+      const wavPath = path.join(stemsDir, wavFile);
+      const mp3Path = path.join(stemsDir, wavFile.replace('.wav', '.mp3'));
+      execFile(ffmpegPath, ['-i', wavPath, '-codec:a', 'libmp3lame', '-b:a', '128k', '-y', mp3Path], { windowsHide: true }, (err) => {
+        if (!err && fs.existsSync(mp3Path)) {
+          fs.unlinkSync(wavPath);
+          console.log(`[Convert] ${wavFile} -> ${wavFile.replace('.wav', '.mp3')}`);
+        }
+        resolve();
+      });
+    });
+  }));
 }
 
 app.post('/api/download', async (req, res) => {
