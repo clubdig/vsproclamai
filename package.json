@@ -1,0 +1,21 @@
+{
+  "name": "vsproclamai",
+  "version": "1.0.0",
+  "description": "VSProclamai - Sistema de Performance ao Vivo (Node.js puro, sem Python)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node setup.js"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
+    "better-sqlite3": "^12.10.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "googleapis": "^173.0.0",
+    "onnxruntime-node": "^1.26.0",
+    "sharp": "^0.35.1",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1"
+  }
+}

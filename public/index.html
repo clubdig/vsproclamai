@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VSProclamai - Sistema de Performance ao Vivo</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🎵</span>
+        <h1>VSProclamai</h1>
+      </div>
+      <div class="header-actions">
+        <div class="room-info" id="roomInfo" style="display:none;">
+          <span id="roomName"></span>
+          <span class="member-count" id="memberCount">0 membros</span>
+        </div>
+        <button class="btn btn-primary" id="btnConnect" onclick="showConnectModal()">Conectar</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-grid">
+      <!-- Sidebar: Song Library -->
+      <!-- Sidebar com Abas -->
+      <aside class="sidebar">
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab active" onclick="switchTab('songs')">🎵 Músicas</button>
+          <button class="sidebar-tab" onclick="switchTab('setlists')">📋 Repertórios</button>
+          <button class="sidebar-tab" onclick="switchTab('drive')">☁️ Drive</button>
+        </div>
+
+        <!-- Aba: Músicas -->
+        <div class="sidebar-panel active" id="tab-songs">
+          <div class="sidebar-header">
+            <h2>Biblioteca</h2>
+            <button class="btn btn-small" onclick="showAddSongModal()">+ Nova</button>
+          </div>
+          <div class="search-box">
+            <input type="text" id="searchSongs" placeholder="Buscar música..." oninput="searchSongsDB()">
+          </div>
+          <div class="song-list" id="songList"></div>
+        </div>
+
+        <!-- Aba: Repertórios -->
+        <div class="sidebar-panel" id="tab-setlists">
+          <div class="sidebar-header">
+            <h2>Repertórios</h2>
+            <button class="btn btn-small" onclick="showAddSetlistModal()">+ Novo</button>
+          </div>
+          <div class="search-box">
+            <input type="date" id="searchDate" onchange="searchSetlistsByDate()">
+            <input type="text" id="searchSetlist" placeholder="Buscar repertório..." oninput="searchSetlists()">
+          </div>
+          <div class="song-list" id="setlistList"></div>
+        </div>
+
+        <!-- Aba: Google Drive -->
+        <div class="sidebar-panel" id="tab-drive">
+          <div class="sidebar-header">
+            <h2>Google Drive</h2>
+            <button class="btn btn-small" onclick="syncDrive()">🔄 Sincronizar</button>
+          </div>
+          <div id="driveStatus" class="drive-status"></div>
+          <div class="search-box">
+            <input type="text" id="searchDrive" placeholder="Buscar no Drive..." oninput="searchDriveFiles()">
+          </div>
+          <div class="song-list" id="driveList"></div>
+        </div>
+      </aside>
+
+      <!-- Center: Player + Mixer -->
+      <main class="center-panel">
+        <!-- Current Song -->
+        <div class="now-playing" id="nowPlaying">
+          <div class="song-title" id="currentSongTitle">Nenhuma música selecionada</div>
+          <div class="song-meta" id="currentSongMeta"></div>
+        </div>
+
+        <!-- Transport Controls -->
+        <div class="transport">
+          <button class="transport-btn" onclick="skipBackward()" title="Voltar 10s">⏮</button>
+          <button class="transport-btn play-btn" id="playBtn" onclick="togglePlay()" title="Play/Pause">▶</button>
+          <button class="transport-btn" onclick="stopPlayback()" title="Parar">⏹</button>
+          <button class="transport-btn" onclick="skipForward()" title="Avançar 10s">⏭</button>
+          <div class="time-display">
+            <span id="currentTime">0:00</span> / <span id="totalTime">0:00</span>
+          </div>
+          <div class="position-bar-container">
+            <input type="range" id="positionBar" class="position-bar" min="0" max="100" value="0" step="0.1" oninput="seekTo(this.value)">
+          </div>
+        </div>
+
+        <!-- Mixer 8 Canais -->
+        <div class="mixer" id="mixer">
+          <div class="mixer-channel" data-stem="vocal">
+            <div class="channel-label">🎤 Vocal</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('vocal', this.value)">
+            <div class="channel-volume" id="vol-vocal">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('vocal')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('vocal')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="backvocals">
+            <div class="channel-label">🎵 Backing</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('backvocals', this.value)">
+            <div class="channel-volume" id="vol-backvocals">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('backvocals')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('backvocals')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="guitar1">
+            <div class="channel-label">🎸 Gtr 1</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('guitar1', this.value)">
+            <div class="channel-volume" id="vol-guitar1">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('guitar1')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('guitar1')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="guitar2">
+            <div class="channel-label">🎸 Gtr 2</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('guitar2', this.value)">
+            <div class="channel-volume" id="vol-guitar2">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('guitar2')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('guitar2')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="synth">
+            <div class="channel-label">🎛️ Synth</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('synth', this.value)">
+            <div class="channel-volume" id="vol-synth">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('synth')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('synth')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="keyboard">
+            <div class="channel-label">🎹 Keys</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('keyboard', this.value)">
+            <div class="channel-volume" id="vol-keyboard">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('keyboard')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('keyboard')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="piano">
+            <div class="channel-label">🎹 Piano</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('piano', this.value)">
+            <div class="channel-volume" id="vol-piano">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('piano')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('piano')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel" data-stem="fx">
+            <div class="channel-label">✨ FX</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('fx', this.value)">
+            <div class="channel-volume" id="vol-fx">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('fx')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('fx')" title="Mudo">M</button>
+          </div>
+        </div>
+
+        <!-- Rhythm Section (separado) -->
+        <div class="rhythm-section">
+          <div class="mixer-channel rhythm" data-stem="drums">
+            <div class="channel-label">🥁 Bateria</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('drums', this.value)">
+            <div class="channel-volume" id="vol-drums">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('drums')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('drums')" title="Mudo">M</button>
+          </div>
+          <div class="mixer-channel rhythm" data-stem="bass">
+            <div class="channel-label">🎸 Baixo</div>
+            <input type="range" class="fader" min="0" max="100" value="100" orient="vertical" oninput="setStemVolume('bass', this.value)">
+            <div class="channel-volume" id="vol-bass">100%</div>
+            <button class="solo-btn" onclick="toggleSolo('bass')" title="Solo">S</button>
+            <button class="mute-btn" onclick="toggleMute('bass')" title="Mudo">M</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Panel: Metronome + Room -->
+      <aside class="right-panel">
+        <!-- Metronome -->
+        <div class="metronome-panel">
+          <h3>Metrônomo</h3>
+          <div class="metronome-visual">
+            <div class="beat-dots" id="beatDots">
+              <div class="beat-dot" data-beat="0"></div>
+              <div class="beat-dot" data-beat="1"></div>
+              <div class="beat-dot" data-beat="2"></div>
+              <div class="beat-dot" data-beat="3"></div>
+            </div>
+          </div>
+          <div class="bpm-control">
+            <button class="btn btn-small" onclick="changeBPM(-1)">-</button>
+            <input type="number" id="bpmInput" value="120" min="30" max="300" onchange="setBPM(this.value)">
+            <button class="btn btn-small" onclick="changeBPM(1)">+</button>
+            <span class="bpm-label">BPM</span>
+          </div>
+          <div class="time-sig">
+            <label>Compasso:</label>
+            <select id="timeSig" onchange="setTimeSignature(this.value)">
+              <option value="4/4">4/4</option>
+              <option value="3/4">3/4</option>
+              <option value="6/8">6/8</option>
+              <option value="2/4">2/4</option>
+            </select>
+          </div>
+          <div class="metronome-controls">
+            <button class="btn btn-primary" id="metronomeBtn" onclick="toggleMetronome()">Ativar Metrônomo</button>
+            <label class="click-accent">
+              <input type="checkbox" id="clickAccent" checked onchange="toggleAccent()"> Acento no 1º tempo
+            </label>
+          </div>
+        </div>
+
+        <!-- Room -->
+        <div class="room-panel" id="roomPanel">
+          <h3>Sala</h3>
+          <div class="member-list" id="memberList">
+            <p class="empty-state">Conecte-se a uma sala para tocar junto</p>
+          </div>
+        </div>
+
+        <!-- Download/Separate -->
+        <div class="tools-panel">
+          <h3>Ferramentas</h3>
+          <button class="btn btn-block" onclick="showDownloadModal()">📥 Download YouTube</button>
+          <button class="btn btn-block" onclick="showSeparateModal()">🎛️ Separar Stems</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal-overlay" id="connectModal" style="display:none;">
+    <div class="modal">
+      <h2>Conectar à Sala</h2>
+      <input type="text" id="inputRoomId" placeholder="ID da Sala (deixe vazio para criar)">
+      <input type="text" id="inputUsername" placeholder="Seu nome">
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="joinRoom()">Entrar</button>
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="addSongModal" style="display:none;">
+    <div class="modal">
+      <h2>Adicionar Música</h2>
+      <input type="text" id="newSongTitle" placeholder="Título">
+      <input type="text" id="newSongArtist" placeholder="Artista">
+      <input type="number" id="newSongBpm" placeholder="BPM" value="120">
+      <input type="text" id="newSongKey" placeholder="Tom (ex: G, Am)">
+      <select id="newSongTimeSig">
+        <option value="4/4">4/4</option>
+        <option value="3/4">3/4</option>
+        <option value="6/8">6/8</option>
+      </select>
+      <input type="text" id="newSongUrl" placeholder="URL do YouTube (opcional)">
+      <select id="newSongCategory">
+        <option value="Louvor">Louvor</option>
+        <option value="Adoração">Adoração</option>
+        <option value="Gospel">Gospel</option>
+        <option value="Outro">Outro</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="addSong()">Adicionar</button>
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="downloadModal" style="display:none;">
+    <div class="modal">
+      <h2>📥 Download do YouTube</h2>
+      <p>Selecione a música e cole a URL do YouTube</p>
+      <select id="downloadSongSelect"></select>
+      <input type="text" id="downloadUrl" placeholder="https://youtube.com/watch?v=...">
+      <div id="downloadProgress" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill" id="downloadProgressFill"></div></div>
+        <p id="downloadStatus">Baixando...</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="startDownload()">Baixar</button>
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="separateModal" style="display:none;">
+    <div class="modal">
+      <h2>🎛️ Separar Stems (8 pistas)</h2>
+      <p>Vocal, Backing, Gtr1, Gtr2, Synth, Keys, Piano, FX, Bateria, Baixo</p>
+      <select id="separateSongSelect"></select>
+      <div id="separateProgress" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill" id="separateProgressFill"></div></div>
+        <p id="separateStatus">Processando com Demucs + DSP...</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="startSeparation()">Separar</button>
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Novo Repertório -->
+  <div class="modal-overlay" id="addSetlistModal" style="display:none;">
+    <div class="modal">
+      <h2>📋 Novo Repertório</h2>
+      <input type="text" id="newSetlistName" placeholder="Nome (ex: Culto Domingo)">
+      <input type="date" id="newSetlistDate">
+      <input type="time" id="newSetlistTime">
+      <input type="text" id="newSetlistLocation" placeholder="Local">
+      <textarea id="newSetlistDesc" placeholder="Observações" rows="2"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="addSetlist()">Criar</button>
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhes do Repertório -->
+  <div class="modal-overlay" id="setlistDetailModal" style="display:none;">
+    <div class="modal modal-large">
+      <h2 id="setlistDetailTitle">Repertório</h2>
+      <div id="setlistDetailInfo" class="setlist-info"></div>
+      <div class="setlist-songs-container">
+        <h3>Músicas</h3>
+        <div id="setlistSongsList" class="setlist-songs-list"></div>
+      </div>
+      <div class="setlist-add-song">
+        <select id="addSongToSetlistSelect">
+          <option value="">Adicionar música...</option>
+        </select>
+        <button class="btn btn-small btn-primary" onclick="addSongToCurrentSetlist()">+ Adicionar</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModals()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Auth Google Drive -->
+  <div class="modal-overlay" id="driveAuthModal" style="display:none;">
+    <div class="modal">
+      <h2>☁️ Conectar Google Drive</h2>
+      <p>1. Coloque o arquivo <code>google-credentials.json</code> em <code>data/</code></p>
+      <p>2. Clique abaixo para autorizar</p>
+      <div id="driveAuthUrl" style="display:none;">
+        <a id="driveAuthLink" href="#" target="_blank" class="btn btn-primary">Abrir URL de Autorização</a>
+        <input type="text" id="driveAuthCode" placeholder="Cole o código aqui">
+        <button class="btn btn-primary" onclick="authenticateDrive()">Autorizar</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModals()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification -->
+  <div class="notification" id="notification"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

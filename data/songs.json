@@ -1,0 +1,16 @@
+{
+  "songs": [
+    {
+      "id": "tithe-1",
+      "title": "Dízimo - Exemplo",
+      "artist": "VSProclamai",
+      "bpm": 120,
+      "key": "G",
+      "timeSignature": "4/4",
+      "duration": 240,
+      "youtubeUrl": "",
+      "category": "Louvor",
+      "stemsReady": false
+    }
+  ]
+}
